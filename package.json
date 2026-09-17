@@ -1,0 +1,56 @@
+{
+  "name": "dsh-session-rail",
+  "version": "0.1.0",
+  "description": "Rail chat switcher for the DeepSeek Harness web client: one icon under New Session opens a searchable flyout of workspaces and their recent sessions.",
+  "license": "MIT",
+  "author": "Mikhail Elgin",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md",
+    "README.ru.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "cordis",
+    "sessions",
+    "sidebar",
+    "rail"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Iwwww/dsh-session-rail.git"
+  },
+  "homepage": "https://github.com/Iwwww/dsh-session-rail#readme",
+  "bugs": {
+    "url": "https://github.com/Iwwww/dsh-session-rail/issues"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "check": "node tools/check.mjs",
+    "previews": "node tools/screenshots.mjs"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web"
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

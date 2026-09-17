@@ -1,0 +1,9 @@
+# dsh-session-rail bundle patch.
+#
+# The package's whole composition contribution is turning its own rail row on.
+# `dsh plugin --profile web add dsh-session-rail` sees this file through
+# `dsh.bundle.patch`, appends the package to the profile's layer stack, and the
+# row below is inserted without any hand-written profile patch.
+- insert:
+    - id: session-rail
+      name: 'dsh-session-rail'
