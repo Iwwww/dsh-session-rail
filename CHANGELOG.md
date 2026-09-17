@@ -36,6 +36,9 @@ First release.
 
 ### Notes
 
+- Russian ships as its own language pack. The locale catalog is process-wide and a
+  language id has one owner, so when another plugin has already registered `ru`
+  this package reuses that definition instead of failing to load.
 - Content search is opt-in in DSH: the shipped `web` profile configures the
   session-query index with `openAt: never`. The README documents the one-line
   profile override; without it the flyout filters by name and says so.
