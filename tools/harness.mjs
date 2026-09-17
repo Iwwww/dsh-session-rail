@@ -139,49 +139,6 @@ export async function dismissOverlays(page) {
 }
 
 /**
- * Open every listed Session once.
- *
- * The host derives a list row's title from the Session's projection cache, which
- * is written when the Session is projected — so a home whose logs were produced
- * by another process shows project basenames until each Session has been opened
- * once. Previewing or asserting titles in the fixture therefore warms them first.
- * @param page - the Playwright page, already loaded and past the overlays.
- * @param limit - safety cap on sessions to open.
- * @returns how many rows were opened.
- */
-export async function warmSessions(page, limit = 80) {
-	// Expand every group first, so one pass over the rows covers them all.
-	const groups = page.locator('[class*="projectRow"]');
-	const groupCount = await groups.count();
-	for (let index = 0; index < groupCount; index += 1) {
-		const group = groups.nth(index);
-		if (!(await group.isVisible().catch(() => false))) continue;
-		if ((await group.getAttribute("aria-expanded")) !== "true") {
-			await group.click({ timeout: 4000 }).catch(() => {});
-			await page.waitForTimeout(300);
-		}
-	}
-	// A folded group hides its remainder behind a disclosure.
-	const more = page.getByText(/show more/i).first();
-	if ((await more.count()) > 0 && (await more.isVisible().catch(() => false))) {
-		await more.click({ timeout: 4000 }).catch(() => {});
-		await page.waitForTimeout(400);
-	}
-	const rows = page.locator('[class*="sessionRow"]');
-	const count = Math.min(await rows.count(), limit);
-	let opened = 0;
-	for (let index = 0; index < count; index += 1) {
-		const row = rows.nth(index);
-		if (!(await row.isVisible().catch(() => false))) continue;
-		await row.click({ timeout: 4000 }).catch(() => {});
-		await page.waitForTimeout(220);
-		opened += 1;
-	}
-	await page.waitForTimeout(1500);
-	return opened;
-}
-
-/**
  * Resolve `playwright-core` and the Chromium executable.
  * @returns the chromium launcher and the executable path.
  */

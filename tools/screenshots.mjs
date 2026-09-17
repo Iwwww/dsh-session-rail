@@ -7,7 +7,7 @@
 import { mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { dismissOverlays, loadPlaywright, startHarness, warmSessions } from "./harness.mjs";
+import { dismissOverlays, loadPlaywright, startHarness } from "./harness.mjs";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const docs = join(repoRoot, "docs");
@@ -26,8 +26,6 @@ try {
 	await page.goto(harness.url, { waitUntil: "domcontentloaded" });
 	await page.waitForTimeout(7000);
 	await dismissOverlays(page);
-	await warmSessions(page);
-	await dismissOverlays(page);
 
 	// Expanded sidebar: the standard browser, untouched by this plugin.
 	await page.screenshot({ path: join(docs, "wide.png"), clip: { x: 0, y: 0, width: 340, height: 470 } });
@@ -37,10 +35,10 @@ try {
 	await page.waitForTimeout(1200);
 	await page.screenshot({ path: join(docs, "rail.png"), clip: { x: 0, y: 0, width: 62, height: 260 } });
 
-	// The flyout, with the current project open and its statuses and times.
+	// The flat list: three workspaces, their four most recent chats, no scrollbars.
 	await page.locator('button[aria-label="Chats"]').first().click();
 	await page.waitForTimeout(900);
-	await page.screenshot({ path: join(docs, "flyout.png"), clip: { x: 0, y: 0, width: 430, height: 470 } });
+	await page.screenshot({ path: join(docs, "flyout.png"), clip: { x: 0, y: 0, width: 430, height: 640 } });
 
 	const text = await page.evaluate(() => document.body.innerText);
 	const leaks = FORBIDDEN.filter((needle) => text.includes(needle));

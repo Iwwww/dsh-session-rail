@@ -10,13 +10,14 @@ The collapsed rail becomes: brand, **New session**, **Search**, **Chats**, then 
 
 ## What it does
 
-- **The current session's project opens by default.** Only one project is open at a time: hovering another swaps it in place, clicking the open one closes it.
-- **The panel's height is frozen when it opens**, so switching projects scrolls inside a stable box instead of dragging the panel's edge away from your pointer.
+- **It is a flat list, always open**: the three most recently used workspaces, each with up to four of its most recent sessions. There are no disclosure rows to expand or collapse — hover a row and it is already there.
+- **No scrollbars, in either direction.** The content is capped to fit, and the panel draws no scrollbar chrome; on a very short window the list scrolls with the wheel instead of showing a bar.
+- **The panel's height is frozen when it opens**, so a session list refresh never drags its edge away from your pointer.
 - **It closes only when you clearly leave** — more than 24 px outside the row and the panel for longer than 420 ms — and the close plays a short exit animation. Re-entering cancels it.
 - **Rows carry the sidebar's statuses**: waiting for an answer, running, completed, and the active-Schedule marker.
 - **Search runs the host's content index** next to local title matching, with snippets, debounced and cancelled like the sidebar's own search.
-- **A project row offers "new session in this project"**, and a session row offers fork, rename and archive on hover.
-- **It is a `tree`**: arrows move, Enter activates, Escape closes, and the search box hands focus to the list on ArrowDown.
+- **A workspace row offers "new session in this workspace"**, and a session row offers fork, rename and archive on hover.
+- **The chat list is a `tree`**: arrows move, Enter opens, Escape closes, and the search box hands focus to the list on ArrowDown.
 - The row exists **only while the rail is collapsed**. A wide sidebar keeps the standard Workspaces browser and its **Add workspace** action untouched.
 
 Collapsed sessions stay hidden, matching the sidebar itself: subagent origins, archived sessions, and the provisional blank New session row.
@@ -60,9 +61,8 @@ Everything lives in the constants above the stylesheet in `lib/client.js`:
 
 | Constant | Default | Meaning |
 |---|---:|---|
-| `MAX_PROJECTS` | 6 | Projects before the "more projects" row |
-| `MAX_CHATS` | 5 | Sessions per project before its "more" row |
-| `MAX_CHATS_EXPANDED` | 25 | Sessions once that row is used, or while searching |
+| `MAX_PROJECTS` | 3 | Workspaces listed, most recently used first |
+| `MAX_CHATS` | 4 | Sessions listed per workspace, most recent first |
 | `HOVER_OPEN_MS` | 160 | Hover delay before the flyout opens |
 | `HOVER_CLOSE_MS` | 420 | Grace period before a pointer that left closes it |
 | `CLOSE_MARGIN` | 24 | How far outside the row and panel still counts as inside |
@@ -70,6 +70,8 @@ Everything lives in the constants above the stylesheet in `lib/client.js`:
 
 ## How it works
 
+- The list is shaped once per render: sessions are grouped by the workspace registry, each group sorted by its newest session, groups sorted against each other the same way and cut to `MAX_PROJECTS`, and each group cut to `MAX_CHATS`. The synthetic "No project" group competes for a slot like any other.
+- No scrollbars are drawn: the list hides its scrollbar (`scrollbar-width: none`, plus `::-webkit-scrollbar`), clips horizontal overflow, and its rows are `box-sizing: border-box`, which is what makes a `width: 100%` row with padding actually fit.
 - The row is registered into `sidebar.panellist`, the global-panel icon list the sidebar shell renders directly under **New session**, and only while `[data-sidebar-collapsed]` is present — so the expanded sidebar is exactly the shipped one.
 - The shell renders that list *before* the Workspaces region, so the requested order (Search above Chats) is a flex `order` swap: the region stops growing, the foot keeps the free space, and the row lands between them. The region's header row, which holds **Add workspace**, is hidden in the rail.
 - The row button belongs to the shell and calls `selectPanel` on click, so the plugin owns it with a native listener that runs before React's root dispatch. The full-width `main` panel stays registered only so that nothing can throw.

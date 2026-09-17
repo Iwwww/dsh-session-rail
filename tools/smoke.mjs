@@ -10,7 +10,7 @@ import { execFileSync } from "node:child_process";
 import { readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { dismissOverlays, loadPlaywright, startHarness, warmSessions } from "./harness.mjs";
+import { dismissOverlays, loadPlaywright, startHarness } from "./harness.mjs";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const results = [];
@@ -87,11 +87,6 @@ try {
 	await dismissOverlays(page);
 	// The host derives list titles from each Session's projection cache, which is
 	// written when the Session is first opened, so the fixture warms them first.
-	await warmSessions(page);
-	// Opening a Session can raise the API-key onboarding again; clear it before the
-	// pointer work below.
-	await dismissOverlays(page);
-
 	// -- rail shape ------------------------------------------------------------
 	check("wide sidebar has no rail row", (await page.locator(ROW).count()) === 0);
 	check("wide sidebar keeps Add workspace", (await page.locator('button[aria-label="Add workspace"]').count()) === 1);
@@ -119,23 +114,44 @@ try {
 	check("clicking the row opens the flyout", await panel.isVisible());
 	check("clicking the row opens no fullscreen panel", (await page.locator(".dsh-rail-sessions__main").count()) === 0);
 	check("row reports expanded", (await row.getAttribute("aria-expanded")) === "true");
-	check("projects are the fixture workspaces", JSON.stringify(await page.locator(".dsh-rail-sessions__project").evaluateAll((rows) => rows.map((node) => node.textContent.replace(/\d+$/, "")))) === JSON.stringify(["acme-web", "orion-api", "design-system"]));
-	check("exactly one project is open", (await page.locator(".dsh-rail-sessions__project.is-open").count()) === 1);
-	// The warm-up leaves the last opened Session current, so open the first project
-	// explicitly before counting its chats.
-	await page.locator(".dsh-rail-sessions__project").first().hover();
-	await page.waitForTimeout(600);
-	check("chats are capped with a more row", (await page.locator(".dsh-rail-sessions__chat").count()) === 5 && (await page.locator(".dsh-rail-sessions__more").first().textContent()) === "1 more");
+	// The three most recent workspaces, newest first; billing-portal is older than
+	// all of them and must not appear.
+	const groupTitles = await page.locator(".dsh-rail-sessions__projectTitle").evaluateAll((nodes) => nodes.map((node) => node.textContent.trim()));
+	check("three most recent workspaces are listed, newest first", JSON.stringify(groupTitles) === JSON.stringify(["acme-web", "orion-api", "design-system"]), JSON.stringify(groupTitles));
+	check("no disclosure controls remain", (await page.locator(".dsh-rail-sessions__project [aria-expanded]").count()) === 0 && (await page.locator(".dsh-rail-sessions__chevron").count()) === 0);
+	check("no more rows remain", (await page.locator(".dsh-rail-sessions__more").count()) === 0);
+	const perGroup = await page.locator(".dsh-rail-sessions__group").evaluateAll((groups) => groups.map((group) => group.querySelectorAll(".dsh-rail-sessions__chat").length));
+	check("each workspace lists at most four chats", perGroup.length > 0 && perGroup.every((count) => count <= 4), JSON.stringify(perGroup));
+	check("the fullest workspace is cut to four", perGroup[0] === 4, JSON.stringify(perGroup));
 	check("every chat row carries a status slot", await page.locator(".dsh-rail-sessions__chat").evaluateAll((rows) => rows.every((node) => node.querySelector(".dsh-rail-sessions__status, .dsh-rail-sessions__chatIcon") !== null)));
 	check("keyboard hints are shown", (await page.locator(".dsh-rail-sessions__hints").textContent()).includes("navigate"));
+	// Titles come from the fixture's projection caches; a schema change would fall
+	// back to project basenames, which this catches.
+	const chatTitles = await page.locator(".dsh-rail-sessions__chat").evaluateAll((nodes) => nodes.map((node) => node.getAttribute("title")));
+	check("fixture titles reach the rows", chatTitles.some((title) => title.includes("Fix the flaky login test")), JSON.stringify(chatTitles.slice(0, 4)));
 
-	// -- accordion + frozen height --------------------------------------------
-	const before = await panel.boundingBox();
-	await page.locator(".dsh-rail-sessions__project").nth(1).hover();
-	await page.waitForTimeout(600);
-	const after = await panel.boundingBox();
-	check("hovering another project swaps the open one", (await page.locator(".dsh-rail-sessions__project").nth(1).getAttribute("class")).includes("is-open") && !(await page.locator(".dsh-rail-sessions__project").first().getAttribute("class")).includes("is-open"));
-	check("panel height is frozen across the swap", Math.abs(before.height - after.height) < 1, `${Math.round(before.height)} -> ${Math.round(after.height)}`);
+	// -- no scrollbars ---------------------------------------------------------
+	const box = await page.evaluate(() => {
+		const list = document.querySelector(".dsh-rail-sessions__list");
+		const panel = document.querySelector(".dsh-rail-sessions__panel");
+		return {
+			listScroll: list.scrollWidth,
+			listClient: list.clientWidth,
+			listGutter: list.offsetWidth - list.clientWidth,
+			listBar: getComputedStyle(list).scrollbarWidth,
+			panelScroll: panel.scrollWidth,
+			panelClient: panel.clientWidth
+		};
+	});
+	check("the list has no horizontal overflow", box.listScroll <= box.listClient + 1, JSON.stringify(box));
+	check("the panel has no horizontal overflow", box.panelScroll <= box.panelClient + 1, JSON.stringify(box));
+	check("no scrollbar chrome is drawn", box.listBar === "none" && box.listGutter === 0, JSON.stringify(box));
+
+	// -- a workspace header is inert ------------------------------------------
+	const rowsBeforeClick = await page.locator(".dsh-rail-sessions__chat").count();
+	await safe(() => page.locator(".dsh-rail-sessions__project").nth(1).click());
+	await page.waitForTimeout(500);
+	check("clicking a workspace header changes nothing", (await page.locator(".dsh-rail-sessions__chat").count()) === rowsBeforeClick);
 
 	// -- content search --------------------------------------------------------
 	await page.fill(".dsh-rail-sessions__input", "bursty");
@@ -154,30 +170,28 @@ try {
 	await page.keyboard.press("ArrowUp");
 	const secondActive = await page.locator(".dsh-rail-sessions__list").getAttribute("aria-activedescendant");
 	check("arrows move the active row", firstActive !== null && secondActive !== null && firstActive !== secondActive, `${firstActive} -> ${secondActive}`);
+	const rowsBeforeArrows = await page.locator(".dsh-rail-sessions__chat").count();
 	await page.keyboard.press("ArrowLeft");
+	await page.keyboard.press("ArrowRight");
 	await page.waitForTimeout(400);
-	check("ArrowLeft collapses the open project", (await page.locator(".dsh-rail-sessions__project.is-open").count()) === 0);
-	await page.locator(".dsh-rail-sessions__project").first().hover();
-	await page.waitForTimeout(500);
+	check("left and right arrows no longer collapse anything", (await page.locator(".dsh-rail-sessions__chat").count()) === rowsBeforeArrows);
 
-	// -- new session in a project ---------------------------------------------
-	// The hover that reveals a row's actions also swaps the open project, which can
-	// move the row out from under the pointer, so hover again before clicking.
+	// -- new session in a workspace -------------------------------------------
 	const project = page.locator(".dsh-rail-sessions__project").nth(1);
 	await project.hover();
-	await page.waitForTimeout(500);
-	await project.hover();
+	await page.waitForTimeout(400);
+	const projectTitle = (await project.locator(".dsh-rail-sessions__projectTitle").textContent()).trim();
 	const projectAdd = project.locator(".dsh-rail-sessions__iconButton").first();
 	await projectAdd.waitFor({ state: "visible", timeout: 5000 }).catch(() => {});
 	await safe(() => projectAdd.click());
 	await page.waitForTimeout(2200);
-	const heroHasProject = await page.evaluate(() => [...document.querySelectorAll("*")].some((node) => node.children.length === 0 && node.textContent.trim() === "orion-api" && node.closest(".dsh-rail-sessions__panel") === null));
-	check("project action starts a session in that project", heroHasProject);
+	const heroHasProject = await page.evaluate((name) => [...document.querySelectorAll("*")].some((node) => node.children.length === 0 && node.textContent.trim() === name && node.closest(".dsh-rail-sessions__panel") === null), projectTitle);
+	check("project action starts a session in that workspace", heroHasProject, projectTitle);
 
 	// -- fork / rename / archive ----------------------------------------------
-	await page.locator(".dsh-rail-sessions__project").first().hover();
-	await page.waitForTimeout(400);
-	const chatCountBefore = await page.locator(".dsh-rail-sessions__chat").count();
+	/** Chats rendered in the first workspace group. */
+	const firstGroupChats = async () => page.locator(".dsh-rail-sessions__group").first().locator(".dsh-rail-sessions__chat").count();
+	const chatCountBefore = await firstGroupChats();
 	const chat = page.locator(".dsh-rail-sessions__chat").first();
 	await chat.hover();
 	await page.waitForTimeout(300);
@@ -186,8 +200,8 @@ try {
 	await forkButton.waitFor({ state: "visible", timeout: 5000 }).catch(() => {});
 	await safe(() => forkButton.click());
 	await page.waitForTimeout(2500);
-	const chatCountAfter = await page.locator(".dsh-rail-sessions__chat").count();
-	check("fork adds a session to the project", chatCountAfter === Math.min(5, chatCountBefore + 1), `${chatCountBefore} -> ${chatCountAfter}`);
+	const chatCountAfter = await firstGroupChats();
+	check("fork adds a session to the workspace", chatCountAfter === Math.min(4, chatCountBefore + 1), `${chatCountBefore} -> ${chatCountAfter}`);
 
 	const target = page.locator(".dsh-rail-sessions__chat").first();
 	const originalTitle = await target.getAttribute("title");
@@ -214,10 +228,6 @@ try {
 	if ((await page.locator(".dsh-rail-sessions__panel").count()) === 0) {
 		await safe(() => row.click());
 		await page.waitForTimeout(900);
-	}
-	if ((await page.locator(".dsh-rail-sessions__project.is-open").count()) === 0) {
-		await safe(() => page.locator(".dsh-rail-sessions__project").first().hover());
-		await page.waitForTimeout(600);
 	}
 	const archiveTarget = page.locator('.dsh-rail-sessions__chat').first();
 	const archivedTitle = await archiveTarget.getAttribute("title");

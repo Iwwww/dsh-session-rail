@@ -55,6 +55,18 @@ export const FIXTURE_WORKSPACES = [
 			{ title: "Extract button tokens", prompt: "Extract button tokens", age: 7300 },
 			{ title: "Review the spacing scale", prompt: "Review the spacing scale", age: 9000 }
 		]
+	},
+	{
+		// Older than every other workspace on purpose: it must fall outside the three
+		// most recent, which is what the smoke test asserts and what keeps the README
+		// preview showing exactly three groups.
+		id: "4d9e8f7b-ac3d-4e4f-8a5b-6c7d8e9fa004",
+		title: "billing-portal",
+		slug: "billing-portal",
+		sessions: [
+			{ title: "Reconcile the invoice totals", prompt: "Reconcile the invoice totals", age: 11000 },
+			{ title: "Retire the legacy price table", prompt: "Retire the legacy price", age: 13000 }
+		]
 	}
 ];
 
@@ -89,43 +101,98 @@ function readSessionLog(file) {
 }
 
 /**
- * Give one generated session its display title and recency.
+ * Give one generated session its display title and its place in the fixture
+ * history.
  *
- * The log is left byte-for-byte intact: the host reads it as a stream of
- * concatenated zstd frames (the first holding exactly the header line), so the
- * fixture only *appends* one more frame carrying a corrected `session/title`.
- * That both sets the title the previews must show and moves the session's
- * `updatedAt` to the wanted age, because the newest event wins.
+ * The title is forced, then every timestamp in the log is shifted so its newest
+ * event lands exactly `ageMinutes` before now. Shifting is the only way to set the
+ * recency: the list's `updatedAt` follows the newest event, so appending an older
+ * frame leaves the session looking "just now". The file keeps the two-frame shape
+ * the reader requires (header, then everything else).
  * @param file - absolute path of `session.v3.jsonl.zstd`.
  * @param title - display title to force.
  * @param ageMinutes - how long before now the session should look last updated.
  */
-function retitleSession(file, title, ageMinutes) {
+function setSessionFixture(file, title, ageMinutes) {
 	const events = readSessionLog(file)
 		.split("\n")
 		.filter((line) => line.trim() !== "")
 		.map((line) => JSON.parse(line));
-	if (!events.some((event) => event.type === "user/message")) {
-		throw new Error(`fixture session ${file} has no user message; the title would be ignored`);
-	}
+	let newest = 0;
 	let maxSeq = 0;
-	let messageSeqs = [];
+	let titleEvent = null;
+	let firstUserSeq = null;
+	for (const event of events) {
+		if (typeof event.time === "number") newest = Math.max(newest, event.time);
+		if (typeof event.seq === "number") maxSeq = Math.max(maxSeq, event.seq);
+		if (event.type === "session/title") titleEvent = event;
+		if (event.type === "user/message" && firstUserSeq === null && typeof event.seq === "number") firstUserSeq = event.seq;
+	}
+	if (firstUserSeq === null) throw new Error(`fixture session ${file} has no user message; its title would be ignored`);
+	if (titleEvent === null) {
+		titleEvent = {
+			type: "session/title",
+			seq: maxSeq + 1,
+			time: newest,
+			data: { title, messageSeqs: [firstUserSeq], source: { kind: "fallback" } }
+		};
+		events.push(titleEvent);
+	} else {
+		titleEvent.data = Object.assign({}, titleEvent.data, { title });
+	}
+	const target = Date.now() - ageMinutes * 60 * 1000;
+	const delta = target - newest;
+	const lines = events.map((event) => {
+		if (typeof event.time === "number") event.time += delta;
+		if (event.type === "session" && typeof event.createdAt === "number") event.createdAt += delta;
+		return JSON.stringify(event);
+	});
+	const headerFrame = zstdCompressSync(Buffer.from(lines[0] + "\n", "utf8"));
+	const bodyFrame = zstdCompressSync(Buffer.from(lines.slice(1).join("\n") + "\n", "utf8"));
+	writeFileSync(file, Buffer.concat([headerFrame, bodyFrame]));
+}
+
+/**
+ * Publish a session's title the way a warm host would.
+ *
+ * A cold session shows its project basename until the host has projected it, and
+ * the host only projects a session that gets opened — which the fixture must not
+ * do, because opening appends events and destroys the recency it just set. Writing
+ * the one projection row the list reads keeps titles correct with no browser and no
+ * activity in the log.
+ * @param home - the fixture home.
+ * @param id - session id.
+ * @param file - that session's log.
+ * @param title - the display title to publish.
+ */
+function writeProjectionCache(home, id, file, title) {
+	const events = readSessionLog(file)
+		.split("\n")
+		.filter((line) => line.trim() !== "")
+		.map((line) => JSON.parse(line));
+	const header = events[0];
+	let maxSeq = 0;
 	for (const event of events) {
 		if (typeof event.seq === "number") maxSeq = Math.max(maxSeq, event.seq);
-		if (event.type === "session/title" && Array.isArray(event.data?.messageSeqs)) messageSeqs = event.data.messageSeqs;
 	}
-	const frame = zstdCompressSync(
-		Buffer.from(
-			JSON.stringify({
-				type: "session/title",
-				seq: maxSeq + 1,
-				time: Date.now() - ageMinutes * 60 * 1000,
-				data: { title, messageSeqs, source: { kind: "fallback" } }
-			}) + "\n",
-			"utf8"
-		)
+	const dir = join(home, "storages", "session_projcache", "sessions");
+	mkdirSync(dir, { recursive: true });
+	writeFileSync(
+		join(dir, id + ".json"),
+		JSON.stringify({
+			version: 7,
+			record: {
+				identity: {
+					formatVersion: 3,
+					createdAt: header.createdAt,
+					cwd: header.cwd,
+					isSeeded: false,
+					inheritedEventCount: 0
+				},
+				rows: { title: { ver: 1, seq: maxSeq, val: title } }
+			}
+		}) + "\n"
 	);
-	appendFileSync(file, frame);
 }
 
 /**
@@ -166,7 +233,9 @@ export function buildFixtureHome(options = {}) {
 			const created = listSessionIds(home).filter((id) => !before.has(id));
 			if (created.length !== 1) throw new Error(`expected one new session for "${session.title}", found ${created.length}`);
 			const id = created[0];
-			retitleSession(findSessionLog(home, id), session.title, session.age);
+			const log = findSessionLog(home, id);
+			setSessionFixture(log, session.title, session.age);
+			writeProjectionCache(home, id, log, session.title);
 			sessionIds.push(id);
 		}
 		workspaceIds.push(workspace.id);
@@ -178,11 +247,6 @@ export function buildFixtureHome(options = {}) {
 			updatedAt: new Date().toISOString()
 		};
 	}
-
-	// The generating runs each wrote a projection cache for the session they had
-	// just created, and that cache still held the pre-rewrite fallback title with a
-	// matching seq — the host would trust it and never look at the rewritten log.
-	rmSync(join(home, "storages", "session_projcache"), { recursive: true, force: true });
 
 	// Pre-acknowledge the shell's first-run notice and plant a dummy provider
 	// credential: without one, every Session open re-raises the masked API-key

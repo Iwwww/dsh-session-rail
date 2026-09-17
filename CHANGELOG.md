@@ -16,19 +16,19 @@ First release.
 - Rail shaping: the requested order (brand, New session, Search, Chats, foot) via
   a flex `order` swap, and the region's **Add workspace** header row hidden in the
   rail only.
-- Flyout behaviour: the current session's project opens by default, one project at
-  a time with hover-swap and click-to-collapse, a frozen open height, proximity
-  closing (24 px / 420 ms) and short enter/exit animations honouring
-  `prefers-reduced-motion`.
+- Flyout behaviour: a flat, always-open list of the three most recently used
+  workspaces with up to four of each one's most recent sessions, a frozen open
+  height, no scrollbars on either axis, proximity closing (24 px / 420 ms) and
+  short enter/exit animations honouring `prefers-reduced-motion`.
 - Row content: the sidebar's session statuses (waiting for an answer, running,
   completed) plus the active-Schedule marker.
 - Search: the host content index with snippets, debounced and cancelled like the
   sidebar's own search, merged with local title and project matches.
-- Actions: new session in a project, and fork, rename (with a dialog) and archive
+- Actions: new session in a workspace, and fork, rename (with a dialog) and archive
   on a session row.
-- Keyboard and assistive support: the list is a `tree` with arrow/Home/End
-  navigation, Enter activation, Escape close, `aria-activedescendant`, and
-  `aria-haspopup`/`aria-expanded` on the rail row.
+- Keyboard and assistive support: the chat list is a `tree` of session rows with
+  arrow/Home/End navigation, Enter activation, Escape close,
+  `aria-activedescendant`, and `aria-haspopup`/`aria-expanded` on the rail row.
 - Localisation: Simplified Chinese (the key-set source of truth), English, and a
   Russian language pack.
 - A `dsh.bundle` patch, so `dsh plugin --profile web add dsh-session-rail`
