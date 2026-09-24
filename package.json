@@ -1,7 +1,7 @@
 {
   "name": "dsh-session-rail",
   "version": "0.1.0",
-  "description": "Rail chat switcher for the DeepSeek Harness web client: one icon under New Session opens a searchable flyout of workspaces and their recent sessions.",
+  "description": "Searchable workspace and recent-session switcher for the DeepSeek Harness web sidebar.",
   "license": "MIT",
   "author": "Mikhail Elgin",
   "type": "module",

@@ -94,15 +94,15 @@ try {
 	await page.waitForTimeout(1200);
 
 	const order = await page.evaluate(() => {
-		const frame = document.querySelector("[data-sidebar-collapsed]");
-		const col = frame.querySelector("nav").parentElement;
+		const frame = document.querySelector('[data-slot="root"]');
+		const col = frame.querySelector('[data-slot="sidebar"]');
 		return [...col.querySelectorAll("button")]
 			.map((button) => ({ label: button.getAttribute("aria-label"), y: Math.round(button.getBoundingClientRect().y), shown: button.getBoundingClientRect().width > 0 && getComputedStyle(button).display !== "none" }))
 			.filter((entry) => entry.shown)
 			.sort((a, b) => a.y - b.y)
 			.map((entry) => entry.label);
 	});
-	check("rail order is brand, new session, search, chats, settings", JSON.stringify(order) === JSON.stringify(["Open sidebar", "New session", "Search sessions", "Chats", "Settings"]), JSON.stringify(order));
+	check("rail order follows DSH panellist placement", JSON.stringify(order) === JSON.stringify(["Open sidebar", "New session", "Chats", "Search sessions", "Settings"]), JSON.stringify(order));
 	check("Add workspace is hidden in the rail", (await page.locator('button[aria-label="Add workspace"]:visible').count()) === 0);
 	check("rail row exposes its popup state", (await page.locator(ROW).getAttribute("aria-haspopup")) === "dialog");
 

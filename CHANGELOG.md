@@ -13,9 +13,6 @@ First release.
 - A **Chats** row in the collapsed sidebar rail that opens a searchable flyout of
   workspaces and their recent sessions; the row exists only while the rail is
   collapsed, so the expanded sidebar stays exactly as shipped.
-- Rail shaping: the requested order (brand, New session, Search, Chats, foot) via
-  a flex `order` swap, and the region's **Add workspace** header row hidden in the
-  rail only.
 - Flyout behaviour: a flat, always-open list of the three most recently used
   workspaces with up to four of each one's most recent sessions, a frozen open
   height, no scrollbars on either axis, proximity closing (24 px / 420 ms) and
@@ -36,9 +33,11 @@ First release.
 
 ### Notes
 
+- Chats is registered through DSH's `sidebar.panellist` slot with an explicit
+  order and is shown only while the sidebar is collapsed.
 - Russian ships as its own language pack. The locale catalog is process-wide and a
   language id has one owner, so when another plugin has already registered `ru`
   this package reuses that definition instead of failing to load.
 - Content search is opt-in in DSH: the shipped `web` profile configures the
-  session-query index with `openAt: never`. The README documents the one-line
-  profile override; without it the flyout filters by name and says so.
+  session-query index with `openAt: never`. Without enabling it, the flyout filters
+  by name and says that content search is unavailable.

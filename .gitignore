@@ -1,3 +1,4 @@
 node_modules/
+.dsh-meow/
 .tmp/
 *.log

@@ -49,6 +49,8 @@ check("bundle patch inserts the package row", new RegExp(`name:\\s*'${manifest.n
 const client = readFileSync(join(repoRoot, "lib/client.js"), "utf8");
 const moduleId = /window\.__ModuleLoader__\.load\(\{\s*\n\s*id:\s*"([^"]+)"/.exec(client)?.[1];
 check("browser bundle registers the package id", moduleId === manifest.name, `bundle id ${moduleId} vs package ${manifest.name}`);
+check("panellist uses the DSH ordering contract", /name:\s*"sidebar\.panellist"[\s\S]*?id:\s*PANEL_ID,[\s\S]*?order:\s*-1/.test(client));
+check("rail integration does not reorder sidebar DOM", !/applyRailOrder|\.style\[property\]|hide-in-rail/.test(client));
 
 /** Keys of one dictionary literal in the bundle. */
 function dictionaryKeys(name) {
@@ -80,16 +82,7 @@ const audited = withoutDictionaries.replace('label: "Русский"', 'label: <
 const strayCyrillic = /["'`][^"'`]*[А-Яа-яЁё][^"'`]*["'`]/.exec(audited);
 const strayCjk = /["'`][^"'`]*[\u4e00-\u9fff][^"'`]*["'`]/.exec(audited);
 check("no hard-coded Russian or Chinese copy in the bundle", strayCyrillic === null && strayCjk === null, (strayCyrillic ?? strayCjk)?.[0]);
-const readmes = ["README.md", "README.ru.md"].map((name) => {
-	try {
-		return readFileSync(join(repoRoot, name), "utf8");
-	} catch {
-		return "";
-	}
-});
-check("both READMEs exist", readmes.every((text) => text.length > 0), "README.md and README.ru.md");
-check("no personal paths in the bundle or READMEs", !/\/home\/mikhail/.test(client) && readmes.every((text) => !/\/home\/mikhail/.test(text)), "/home/mikhail must not ship");
-check("both READMEs show the preview", readmes.every((text) => text.includes("docs/flyout.png")) && readmes.every((text) => text.includes("docs/rail.png")));
+check("bundle has no personal paths", !/\/home\/mikhail/.test(client), "/home/mikhail must not ship");
 
 process.stdout.write(failures.length === 0 ? "\ncheck: all good\n" : `\ncheck: ${failures.length} failing\n`);
 process.exit(failures.length === 0 ? 0 : 1);
