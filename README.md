@@ -2,7 +2,7 @@
 
 A searchable flyout for switching between workspaces and recent sessions in the DeepSeek Harness web client.
 
-![Session rail flyout](docs/flyout.png)
+<img src="docs/flyout.png" alt="Session rail flyout" width="480">
 
 ## Install
 
